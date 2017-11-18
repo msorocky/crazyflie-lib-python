@@ -24,51 +24,44 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA  02110-1301, USA.
 """
-Simple example that connects to the first Crazyflie found, logs the Stabilizer
-and prints it to the console. After 10s the application disconnects and exits.
+Simple example that connects to the first Crazyflie found, ramps up/down
+the motors and disconnects.
 """
 import logging
 import time
+from threading import Thread
 from threading import Timer
 
-#from cflib import crtp
-import cflib.crtp  # noqa
+import cflib
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 
-# Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
 
-class LoggingExample:
-    """
-    Simple logging example class that logs the Stabilizer from a supplied
-    link uri and disconnects after 5s.
-    """
+class MotorRampExample:
+    """Example that connects to a Crazyflie and ramps the motors up/down and
+    the disconnects"""
 
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
 
-        # Create a Crazyflie object without specifying any cache dirs
         self._cf = Crazyflie()
 
-        # Connect some callbacks from the Crazyflie API
         self._cf.connected.add_callback(self._connected)
         self._cf.disconnected.add_callback(self._disconnected)
         self._cf.connection_failed.add_callback(self._connection_failed)
         self._cf.connection_lost.add_callback(self._connection_lost)
 
-        print('Connecting to %s' % link_uri)
-
-        # Try to connect to the Crazyflie
         self._cf.open_link(link_uri)
 
-        # Variable used to keep main loop occupied until disconnect
-        self.is_connected = True
+        print('Connecting to %s' % link_uri)
 
     def _connected(self, link_uri):
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
+
+        """This is from exmaple basicLog"""
         print('Connected to %s' % link_uri)
 
         # The definition of the logconfig can be made before connecting
@@ -94,10 +87,12 @@ class LoggingExample:
         except AttributeError:
             print('Could not add Stabilizer log config, bad configuration.')
 
-        # Start a timer to disconnect in 10s
-        t = Timer(5, self._cf.close_link)
-        t.start()
+        # Start a separate thread to do the motor test.
+        # Do not hijack the calling thread!
+        Thread(target=self._ramp_motors).start()
 
+
+    """This is from the basiclog file"""
     def _stab_log_error(self, logconf, msg):
         """Callback from the log API when an error occurs"""
         print('Error when logging %s: %s' % (logconf.name, msg))
@@ -106,11 +101,11 @@ class LoggingExample:
         """Callback froma the log API when data arrives"""
         print('[%d][%s]: %s' % (timestamp, logconf.name, data))
 
+
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
-        at the speficied address)"""
+        at the specified address)"""
         print('Connection to %s failed: %s' % (link_uri, msg))
-        self.is_connected = False
 
     def _connection_lost(self, link_uri, msg):
         """Callback when disconnected after a connection has been made (i.e
@@ -120,7 +115,29 @@ class LoggingExample:
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print('Disconnected from %s' % link_uri)
-        self.is_connected = False
+
+    def _ramp_motors(self):
+        thrust_mult = 1
+        thrust_step = 500
+        thrust = 20000
+        pitch = 0
+        roll = 0
+        yawrate = 0
+
+        # Unlock startup thrust protection
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
+
+        while thrust >= 20000:
+            self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
+            time.sleep(0.1)
+            if thrust >= 25000:
+                thrust_mult = -1
+            thrust += thrust_step * thrust_mult
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
+        # Make sure that the last packet leaves before the link is closed
+        # since the message queue is not flushed before closing
+        time.sleep(0.1)
+        self._cf.close_link()
 
 
 if __name__ == '__main__':
@@ -134,12 +151,6 @@ if __name__ == '__main__':
         print(i[0])
 
     if len(available) > 0:
-        le = LoggingExample(available[0][0])
+        le = MotorRampExample(available[0][0])
     else:
         print('No Crazyflies found, cannot run example')
-
-    # The Crazyflie lib doesn't contain anything to keep the application alive,
-    # so this is where your application should do something. In our case we
-    # are just waiting until we are disconnected.
-    while le.is_connected:
-        time.sleep(1)

@@ -84,6 +84,7 @@ class _RadioManager():
 
     _radios = []  # Hardware Crazyradio objects
 
+    #datarate: 0 -> 250K, 1 -> 1M, 2 -> 2M
     def __init__(self, devid, channel=0, datarate=0, address=DEFAULT_ADDR_A):
         self._devid = devid
         self._channel = channel
@@ -341,10 +342,13 @@ class RadioDriver(CRTPDriver):
             cradio.set_arc(1)
 
             cradio.set_data_rate(cradio.DR_250KPS)
-
+            
+            print('I am here')
+            
             if address is None or address == DEFAULT_ADDR:
                 found += [['radio://0/{}/250K'.format(c), '']
                           for c in self._scan_radio_channels(cradio)]
+                print(found)
                 cradio.set_data_rate(cradio.DR_1MPS)
                 found += [['radio://0/{}/1M'.format(c), '']
                           for c in self._scan_radio_channels(cradio)]

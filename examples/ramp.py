@@ -80,7 +80,7 @@ class MotorRampExample:
     def _ramp_motors(self):
         thrust_mult = 1
         thrust_step = 500
-        thrust = 20000
+        thrust = 25000
         pitch = 0
         roll = 0
         yawrate = 0
@@ -88,10 +88,10 @@ class MotorRampExample:
         # Unlock startup thrust protection
         self._cf.commander.send_setpoint(0, 0, 0, 0)
 
-        while thrust >= 20000:
+        while thrust >= 25000:
             self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
             time.sleep(0.1)
-            if thrust >= 25000:
+            if thrust >= 35000:
                 thrust_mult = -1
             thrust += thrust_step * thrust_mult
         self._cf.commander.send_setpoint(0, 0, 0, 0)
