@@ -64,6 +64,7 @@ class MotorRampExample:
         """This is from exmaple basicLog"""
         print('Connected to %s' % link_uri)
 
+
         # The definition of the logconfig can be made before connecting
         self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=10)
         self._lg_stab.add_variable('stabilizer.roll', 'float')
@@ -94,13 +95,17 @@ class MotorRampExample:
 
     """This is from the basiclog file"""
     def _stab_log_error(self, logconf, msg):
-        """Callback from the log API when an error occurs"""
+        """Callback from the log API when an error occurs""" 
         print('Error when logging %s: %s' % (logconf.name, msg))
 
     def _stab_log_data(self, timestamp, data, logconf):
         """Callback froma the log API when data arrives"""
-        print('[%d][%s]: %s' % (timestamp, logconf.name, data))
-
+        """print('[%d][%s]: %s' % (timestamp, logconf.name, data))"""
+        """textfile stabilizerData.txt is currently containing all the stailizer log from Crazyflie during operation"""
+        with open('StabilizerData.txt', 'a') as stabilizerData:
+        	stabilizerData.write('[%d][%s]: %s' % (timestamp, logconf.name, data))
+        	stabilizerData.write('\n')
+    	
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -119,18 +124,28 @@ class MotorRampExample:
     def _ramp_motors(self):
         thrust_mult = 1
         thrust_step = 500
-        thrust = 20000
+        thrust = 0
         pitch = 0
         roll = 0
         yawrate = 0
 
+
+        ifFly = 0
+
+        while (ifFly == 0):
+            thrust = input('Enter desired thrust (between 20000 to 30000) to fly Cazyflie\n')
+            if(thrust < 20000 or thrust > 30000):
+                print('invalid thrust value, please try again. ')
+            else:
+            	ifFly = 1
+
         # Unlock startup thrust protection
         self._cf.commander.send_setpoint(0, 0, 0, 0)
 
-        while thrust >= 20000:
+        while (thrust >= 20000):
             self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
             time.sleep(0.1)
-            if thrust >= 25000:
+            if thrust >= 35000:
                 thrust_mult = -1
             thrust += thrust_step * thrust_mult
         self._cf.commander.send_setpoint(0, 0, 0, 0)
@@ -141,6 +156,12 @@ class MotorRampExample:
 
 
 if __name__ == '__main__':
+   
+    ifstart = 0
+    	
+    while (ifstart == 0):
+        ifstart = input('entre "1" to search for Crazyflie\n')
+
     # Initialize the low-level drivers (don't list the debug drivers)
     cflib.crtp.init_drivers(enable_debug_driver=False)
     # Scan for Crazyflies and use the first one found
