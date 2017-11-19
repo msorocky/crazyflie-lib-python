@@ -127,9 +127,9 @@ class MotorRampExample:
         	stabilizerData.write('\n')
 
     def _log_accel_data(self, timestamp, data, logconf):
-        with open('AccelerometerData.txt', 'a') as Accelerometer:
-        	stabilizerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
-        	stabilizerData.write('\n')	    	
+        with open('AccelerometerData.txt', 'a') as AccelerometerData:
+        	AccelerometerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
+        	AccelerometerData.write('\n')	    	
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -169,7 +169,7 @@ class MotorRampExample:
         while (thrust >= 20000):
             self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
             time.sleep(0.1)
-            if thrust >= 35000:
+            if thrust >= 30000:
                 thrust_mult = -1
             thrust += thrust_step * thrust_mult
         self._cf.commander.send_setpoint(0, 0, 0, 0)
