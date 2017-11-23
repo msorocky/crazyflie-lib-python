@@ -30,7 +30,6 @@ the motors and disconnects.
 import logging
 import time
 import threading
-
 import sys
 
 import cflib
@@ -92,7 +91,7 @@ class Comm:
 
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
-        worker = threading.Thread(target = self._ramp_motors, name = 'worker', args = ('pls', 1, keyboardEvent))
+        worker = threading.Thread(target = self.comm_test, name = 'worker', args = ('pls', 1, keyboardEvent))
         worker.start()
 
         
@@ -120,21 +119,36 @@ class Comm:
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print('Disconnected from %s' % link_uri)
 
-    def _ramp_motors(self, name, delay, keyboardEvent): 
+    def comm_test(self, name, delay, keyboardEvent): 
 
         # Unlock startup thrust protection
         self._cf.commander.send_setpoint(0, 0, 0, 0)
-            
+        
+        print 'Beginning comms test...'
         while keyboardEvent.is_set():
-            HOVER = 0
-            pitch = 0
-            roll = 0
-            yawrate = 0
+            i = 0
+            HOVER = 35000
+            while i < 10:
+                
+                pitch = 10
+                roll = 0
+                yawrate = 5 
+                i = i + 1
 
-            self._cf.commander.send_setpoint(0, 0, 0, HOVER)
+                self._cf.commander.send_setpoint(roll, pitch, yawrate, HOVER)
+                time.sleep(0.07)
             
-            time.sleep(0.5)
-            print 'tick'
+            i = 0
+            while i < 10:
+                
+                pitch = -10
+                roll = 0
+                yawrate = 0 
+                i = i + 1
+
+                self._cf.commander.send_setpoint(roll, pitch, yawrate, HOVER)
+            
+                time.sleep(0.07)
         
         # If we get here, time to shut down -- send 0 thrust first
         self._cf.commander.send_setpoint(0, 0, 0, 0)
@@ -148,6 +162,7 @@ if __name__ == '__main__':
 
     print('Scanning interfaces for Crazyflies...')
     available = cflib.crtp.scan_interfaces()
+
     print('Crazyflies found:')
     for i in available:
         print(i[0])
@@ -158,18 +173,20 @@ if __name__ == '__main__':
         le = Comm(available[0][0])
     else:
         print('No Crazyflies found')
-
+        sys.exit(0)
 
     try:
         while 1:
             time.sleep(0.1)   
     except KeyboardInterrupt:
-        print('User interrupted operation; shutting down...')
-
+        print('\nUser interrupted operation; shutting down...')
+        le._cf.commander.send_setpoint(0, 0, 0, 0)
         for t in threading.enumerate():
-            if t.name == 'worker':        
+            if t.name == 'worker':    
+                print 'Clearing event...'    
                 keyboardEvent.clear()
                 t.join()
+                print 'Closing link...'
                 le._cf.close_link()
                 sys.exit(0)
 

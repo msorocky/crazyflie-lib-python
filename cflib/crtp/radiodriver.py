@@ -343,8 +343,6 @@ class RadioDriver(CRTPDriver):
 
             cradio.set_data_rate(cradio.DR_250KPS)
             
-            print('I am here')
-            
             if address is None or address == DEFAULT_ADDR:
                 found += [['radio://0/{}/250K'.format(c), '']
                           for c in self._scan_radio_channels(cradio)]
