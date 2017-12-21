@@ -23,10 +23,7 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA  02110-1301, USA.
-"""
-Simple example that connects to the first Crazyflie found, ramps up/down
-the motors and disconnects.
-"""
+
 import logging
 import time
 import threading
@@ -37,8 +34,6 @@ from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 
 logging.basicConfig(level=logging.ERROR)
-
-keyboardEvent = threading.Event()
 
 class Comm:
     """Example that connects to a Crazyflie and ramps the motors up/down and
@@ -91,7 +86,7 @@ class Comm:
 
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
-        worker = threading.Thread(target = self.comm_test, name = 'worker', args = ('pls', 1, keyboardEvent))
+        worker = threading.Thread(target = self.comm_test)
         worker.start()
 
         
@@ -119,15 +114,15 @@ class Comm:
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print('Disconnected from %s' % link_uri)
 
-    def comm_test(self, name, delay, keyboardEvent): 
+    def comm_test(self): 
 
         # Unlock startup thrust protection
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         
         print 'Beginning comms test...'
-        while keyboardEvent.is_set():
+        while True:
             i = 0
-            HOVER = 35000
+            HOVER = 2000
             while i < 10:
                 
                 pitch = 10
@@ -136,63 +131,34 @@ class Comm:
                 i = i + 1
 
                 self._cf.commander.send_setpoint(roll, pitch, yawrate, HOVER)
-                time.sleep(0.07)
+                time.sleep(1)
             
-            i = 0
-            while i < 10:
-                
-                pitch = -10
-                roll = 0
-                yawrate = 0 
-                i = i + 1
-
-                self._cf.commander.send_setpoint(roll, pitch, yawrate, HOVER)
-            
-                time.sleep(0.07)
-        
-        # If we get here, time to shut down -- send 0 thrust first
-        self._cf.commander.send_setpoint(0, 0, 0, 0)
-
-
-
+           
 if __name__ == '__main__':
-    # Initialize the low-level drivers (don't list the debug drivers)
-    cflib.crtp.init_drivers(enable_debug_driver=False)
-    # Scan for Crazyflies and use the first one found
-
-    print('Scanning interfaces for Crazyflies...')
-    available = cflib.crtp.scan_interfaces()
-
-    print('Crazyflies found:')
-    for i in available:
-        print(i[0])
-
-    keyboardEvent.set()
-
-    if len(available) > 0:
-        le = Comm(available[0][0])
-    else:
-        print('No Crazyflies found')
-        sys.exit(0)
 
     try:
-        while 1:
-            time.sleep(0.1)   
+            # Initialize the low-level drivers (don't list the debug drivers)
+        cflib.crtp.init_drivers(enable_debug_driver=False)
+        # Scan for Crazyflies and use the first one found
+
+        print('Scanning interfaces for Crazyflies...')
+        available = cflib.crtp.scan_interfaces()
+
+        for i in available:
+            print('Found: ' + i[0])
+            
+        if len(available) > 0:
+            le = Comm('radio://0/80/2M')
+        else:
+            print('No Crazyflies found')
+            sys.exit(0)
+    
+        while True:
+            time.sleep(0.1)
+
     except KeyboardInterrupt:
         print('\nUser interrupted operation; shutting down...')
+                
         le._cf.commander.send_setpoint(0, 0, 0, 0)
-        for t in threading.enumerate():
-            if t.name == 'worker':    
-                print 'Clearing event...'    
-                keyboardEvent.clear()
-                t.join()
-                print 'Closing link...'
-                le._cf.close_link()
-                sys.exit(0)
-
-        # Should never get here
-        print 'ERROR: worker thread not running'
-        sys.exit(-1)
-    
-
- 
+        le._cf.close_link()
+        sys.exit(0)    
