@@ -36,14 +36,15 @@ import cflib
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 
-logging.basicConfig(level=logging.ERROR)
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
+logging.basicConfig(level=logging.ERROR)
 
 class MotorRampExample:
 
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
-
         self._cf = Crazyflie()
 
         self._cf.connected.add_callback(self._connected)
@@ -62,58 +63,22 @@ class MotorRampExample:
         """This is from exmaple basicLog"""
         print('Connected to %s' % link_uri)
 
-
-        # The definition of the logconfig can be made before connecting
-        self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=10)
-        self._lg_stab.add_variable('stabilizer.roll', 'float')
-        self._lg_stab.add_variable('stabilizer.pitch', 'float')
-        self._lg_stab.add_variable('stabilizer.yaw', 'float')
-
-        # Adding the configuration cannot be done until a Crazyflie is
-        # connected, since we need to check that the variables we
-        # would like to log are in the TOC.
-        try:
-            self._cf.log.add_config(self._lg_stab)
-            # This callback will receive the data
-            self._lg_stab.data_received_cb.add_callback(self._stab_log_data)
-            # This callback will be called on errors
-            self._lg_stab.error_cb.add_callback(self._stab_log_error)
-            # Start the logging
-            self._lg_stab.start()
-        except KeyError as e:
-            print('Could not start log configuration,'
-                  '{} not found in TOC'.format(str(e)))
-        except AttributeError:
-            print('Could not add Stabilizer log config, bad configuration.')
-
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
-        Thread(target=self._ramp_motors).start()
+        Thread(target = self._ramp_motors).start()
+        Thread(target = self._getStabilizer).start()
+        Thread(target = self._getAccelerometer).start()
+        Thread(target = self._getGyroscope).start()
+        
+        """
+        This part is for graphing, needs further work.
+        fig = plt.figure()
+        global ax 
+        ax = fig.add_subplot(1,1,1)
+        ani = animation.FuncAnimation(fig, animate, interval=100)
+        plt.show()
+        """
 
-
-        self._log_conf = LogConfig(name="Accel", period_in_ms=10)
-        self._log_conf.add_variable('acc.x', 'float')
-        self._log_conf.add_variable('acc.y', 'float')
-        self._log_conf.add_variable('acc.z', 'float')
-
-    
-        try:
-            self._log= self._cf.log.add_config(self._log_conf)
-            print('I did it 1')
-            if self._log_conf is not None:
-                print('Got in the if')
-                self._log_conf.data_received_cb.add_callback(self._log_accel_data)
-                print('callback worked')
-                self._log_conf.start()
-            else:
-                print("acc.x/y/z not found in log TOC") 
-        except KeyError as e:
-            print('Could not start log configuration,'
-                  '{} not found in TOC'.format(str(e)))
-        except AttributeError:
-            print('Could not add Stabilizer log config, bad configuration.')
-
-    """This is from the basiclog file"""
     def _stab_log_error(self, logconf, msg):
         """Callback from the log API when an error occurs""" 
         print('Error when logging %s: %s' % (logconf.name, msg))
@@ -121,15 +86,22 @@ class MotorRampExample:
     def _stab_log_data(self, timestamp, data, logconf):
         """Callback froma the log API when data arrives"""
         """print('[%d][%s]: %s' % (timestamp, logconf.name, data))"""
-        """textfile stabilizerData.txt is currently containing all the stailizer log from Crazyflie during operation"""
         with open('StabilizerData.txt', 'a') as stabilizerData:
-        	stabilizerData.write('[%d][%s]: %s' % (timestamp, logconf.name, data))
-        	stabilizerData.write('\n')
+            stabilizerData.write('[%d][%s]: %s' % (timestamp, logconf.name, data))
+            stabilizerData.write('\n')
+
+    def _log_gyro_data(self, timestamp, data, logconf):
+        with open('GyroscopeData.txt', 'a') as GyroscopeData:
+            GyroscopeData.write('[%d] Gyroscope: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['gyro.x'], data['gyro.y'], data['gyro.z']))
+            GyroscopeData.write('\n')
+        with open('SensorMaster.txt', 'a') as sensorMaster:
+            sensorMaster.write('Gyroscope,%d,%.2f,%.2f,%.2f' %(timestamp, data['gyro.x'], data['gyro.y'], data['gyro.z']))
+            sensorMaster.write('\n')
 
     def _log_accel_data(self, timestamp, data, logconf):
         with open('AccelerometerData.txt', 'a') as AccelerometerData:
-        	AccelerometerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
-        	AccelerometerData.write('\n')	    	
+            AccelerometerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
+            AccelerometerData.write('\n')   
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -152,8 +124,6 @@ class MotorRampExample:
         pitch = 0
         roll = 0
         yawrate = 0
-
-
         ifFly = 0
 
         while (ifFly == 0):
@@ -169,15 +139,104 @@ class MotorRampExample:
         while (thrust >= 20000):
             self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
             time.sleep(0.1)
-            if thrust >= 30000:
+            if thrust >= 36000:
                 thrust_mult = -1
             thrust += thrust_step * thrust_mult
+            print('%s' %(thrust))
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         # Make sure that the last packet leaves before the link is closed
         # since the message queue is not flushed before closing
         time.sleep(0.1)
         self._cf.close_link()
 
+    def _getStabilizer(self):
+    	 # The definition of the logconfig can be made before connecting
+        self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=10)
+        self._lg_stab.add_variable('stabilizer.roll', 'float')
+        self._lg_stab.add_variable('stabilizer.pitch', 'float')
+        self._lg_stab.add_variable('stabilizer.yaw', 'float')
+        print('I am doing stuff')
+        # Adding the configuration cannot be done until a Crazyflie is
+        # connected, since we need to check that the variables we
+        # would like to log are in the TOC.
+        try:
+            self._cf.log.add_config(self._lg_stab)
+            # This callback will receive the data
+            self._lg_stab.data_received_cb.add_callback(self._stab_log_data)
+            # This callback will be called on errors
+            self._lg_stab.error_cb.add_callback(self._stab_log_error)
+            # Start the logging
+            self._lg_stab.start()
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add Stabilizer log config, bad configuration.')
+
+    def _getAccelerometer(self):
+        self._log_conf = LogConfig(name="Accel", period_in_ms=10)
+        self._log_conf.add_variable('acc.x', 'float')
+        self._log_conf.add_variable('acc.y', 'float')
+        self._log_conf.add_variable('acc.z', 'float')
+
+        try:
+            self._log = self._cf.log.add_config(self._log_conf)
+            if self._log_conf is not None:
+                self._log_conf.data_received_cb.add_callback(self._log_accel_data)
+                self._log_conf.start()
+            else:
+                print("acc.x/y/z not found in log TOC") 
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add Accelerometer log config, bad configuration.')
+
+    def _getGyroscope(self):
+        self._gyro_conf = LogConfig(name="Gyro", period_in_ms=10)
+        self._gyro_conf.add_variable('gyro.x', 'float')
+        self._gyro_conf.add_variable('gyro.y', 'float')
+        self._gyro_conf.add_variable('gyro.z', 'float')
+    
+        try:
+            self._gyro = self._cf.log.add_config(self._gyro_conf)
+            if self._gyro_conf is not None:
+                self._gyro_conf.data_received_cb.add_callback(self._log_gyro_data)
+                self._gyro_conf.start()
+            else:
+                print("gyro.x/y/z not found in log TOC") 
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add Gyroscope log config, bad configuration.')
+
+"""
+This part is for graphing, needs more work.
+def animate(i):
+    graph_data = open('SensorMaster.txt','r').read()
+    lines = graph_data.split('\n')
+    timescale = []
+    gx = []
+    gy = []
+    gz = []
+    j=1
+    for line in lines:
+        if len(lines)-200 > j:
+            print(j)
+            j=j+1
+            continue
+        if len(line) > 3:
+            sensortype, ts, x, y, z = line.split(',')
+            if sensortype == 'Gyroscope':
+                timescale.append(ts)
+                gx.append(x)
+                gy.append(y)
+                gz.append(z)
+        j=j+1   
+    ax.clear()
+    ax.plot(timescale,gx)
+"""
 
 if __name__ == '__main__':
    
@@ -185,6 +244,19 @@ if __name__ == '__main__':
     	
     while (ifstart == 0):
         ifstart = input('entre "1" to search for Crazyflie\n')
+
+    #clearn all files if not done so previously
+    myfile = open('StabilizerData.txt', 'w')
+    myfile.write('')
+    myfile.close()
+    myfile = open('AccelerometerData.txt', 'w')
+    myfile.write('')
+    myfile.close()
+    myfile = open('GyroscopeData.txt', 'w')
+    myfile.write('')
+    myfile.close()
+    myfile = open('SensorMaster.txt', 'w')
+    myfile.write
 
     # Initialize the low-level drivers (don't list the debug drivers)
     cflib.crtp.init_drivers(enable_debug_driver=False)
