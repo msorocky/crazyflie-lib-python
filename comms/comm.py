@@ -31,6 +31,7 @@ import sys
 
 import cflib
 from cflib.crazyflie import Crazyflie
+from motion_commander import MotionCommander
 from cflib.crazyflie.log import LogConfig
 
 logging.basicConfig(level=logging.ERROR)
@@ -52,6 +53,7 @@ class Comm:
         self._cf.open_link(link_uri)
 
         print('Connecting to %s' % link_uri)
+        self.is_connected = True
 
 
     def _connected(self, link_uri):
@@ -67,30 +69,53 @@ class Comm:
         self._lg_stab.add_variable('stabilizer.pitch', 'float')
         self._lg_stab.add_variable('stabilizer.yaw', 'float')
 
+        self._log_conf = LogConfig(name="Accel", period_in_ms=10)
+        self._log_conf.add_variable('acc.x', 'float')
+        self._log_conf.add_variable('acc.y', 'float')
+        self._log_conf.add_variable('acc.z', 'float')
+
         # Adding the configuration cannot be done until a Crazyflie is
         # connected, since we need to check that the variables we
         # would like to log are in the TOC.
         try:
             self._cf.log.add_config(self._lg_stab)
+            
             # This callback will receive the data
             self._lg_stab.data_received_cb.add_callback(self._stab_log_data)
+            
             # This callback will be called on errors
             self._lg_stab.error_cb.add_callback(self._stab_log_error)
             # Start the logging
             self._lg_stab.start()
+
+            self._log= self._cf.log.add_config(self._log_conf)
+            print('I did it 1')
+
+            if self._log_conf is not None:
+                print('Got in the if')
+                self._log_conf.data_received_cb.add_callback(self._log_accel_data)
+                print('callback worked')
+                self._log_conf.start()
+            else:
+                print("acc.x/y/z not found in log TOC") 
+
         except KeyError as e:
             print('Could not start log configuration,'
                   '{} not found in TOC'.format(str(e)))
         except AttributeError:
-            print('Could not add Stabilizer log config, bad configuration.')
+            print('Could not add log config, bad configuration.')
 
         # Start a separate thread to do the motor test.
         # Do not hijack the calling thread!
+        self.is_connected = True
         worker = threading.Thread(target = self.comm_test)
         worker.start()
 
-        
-    """This is from the basiclog file"""
+    def _log_accel_data(self, timestamp, data, logconf):
+        #print('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %
+        #            (timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
+
+        """This is from the basiclog file"""
     def _stab_log_error(self, logconf, msg):
         """Callback from the log API when an error occurs"""
         #print('Error when logging %s: %s' % (logconf.name, msg))
@@ -117,22 +142,14 @@ class Comm:
     def comm_test(self): 
 
         # Unlock startup thrust protection
-        self._cf.commander.send_setpoint(0, 0, 0, 0)
-        
-        print 'Beginning comms test...'
-        while True:
-            i = 0
-            HOVER = 2000
-            while i < 10:
-                
-                pitch = 10
-                roll = 0
-                yawrate = 5 
-                i = i + 1
+        #self._cf.commander.send_setpoint(0, 0, 0, 0)
 
-                self._cf.commander.send_setpoint(roll, pitch, yawrate, HOVER)
-                time.sleep(1)
-            
+        mc = MotionCommander(self._cf)
+        
+        print 'Beginning test...'
+        mc.take_off()
+        while True:
+            i =0
            
 if __name__ == '__main__':
 
