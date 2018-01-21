@@ -41,7 +41,7 @@ import matplotlib.animation as animation
 
 logging.basicConfig(level=logging.ERROR)
 
-class MotorRampExample:
+class MotorRun:
 
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
@@ -56,7 +56,7 @@ class MotorRampExample:
 
         print('Connecting to %s' % link_uri)
 
-    def _connected(self, link_uri):
+    def _connected(self, link_uri): 
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
 
@@ -70,14 +70,6 @@ class MotorRampExample:
         Thread(target = self._getAccelerometer).start()
         Thread(target = self._getGyroscope).start()
         
-        """
-        This part is for graphing, needs further work.
-        fig = plt.figure()
-        global ax 
-        ax = fig.add_subplot(1,1,1)
-        ani = animation.FuncAnimation(fig, animate, interval=100)
-        plt.show()
-        """
 
     def _stab_log_error(self, logconf, msg):
         """Callback from the log API when an error occurs""" 
@@ -89,19 +81,17 @@ class MotorRampExample:
         with open('StabilizerData.txt', 'a') as stabilizerData:
             stabilizerData.write('[%d][%s]: %s' % (timestamp, logconf.name, data))
             stabilizerData.write('\n')
+        with open('SensorMaster.txt', 'a') as sensorMaster:
+            sensorMaster.write('%d,%.2f,%.2f,%.2f' %(timestamp, data['stabilizer.roll'], data['stabilizer.yaw'], data['stabilizer.pitch']))
+            sensorMaster.write('\n')
 
     def _log_gyro_data(self, timestamp, data, logconf):
         with open('GyroscopeData.txt', 'a') as GyroscopeData:
-            GyroscopeData.write('[%d] Gyroscope: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['gyro.x'], data['gyro.y'], data['gyro.z']))
-            GyroscopeData.write('\n')
-        with open('SensorMaster.txt', 'a') as sensorMaster:
-            sensorMaster.write('Gyroscope,%d,%.2f,%.2f,%.2f' %(timestamp, data['gyro.x'], data['gyro.y'], data['gyro.z']))
-            sensorMaster.write('\n')
+            GyroscopeData.write('[%d][%s]: %s \n' % (timestamp, logconf.name, data))
 
     def _log_accel_data(self, timestamp, data, logconf):
         with open('AccelerometerData.txt', 'a') as AccelerometerData:
-            AccelerometerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
-            AccelerometerData.write('\n')   
+            AccelerometerData.write('[%d][%s]: %s \n' % (timestamp, logconf.name, data))
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
@@ -142,7 +132,6 @@ class MotorRampExample:
             if thrust >= 36000:
                 thrust_mult = -1
             thrust += thrust_step * thrust_mult
-            print('%s' %(thrust))
         self._cf.commander.send_setpoint(0, 0, 0, 0)
         # Make sure that the last packet leaves before the link is closed
         # since the message queue is not flushed before closing
@@ -155,7 +144,6 @@ class MotorRampExample:
         self._lg_stab.add_variable('stabilizer.roll', 'float')
         self._lg_stab.add_variable('stabilizer.pitch', 'float')
         self._lg_stab.add_variable('stabilizer.yaw', 'float')
-        print('I am doing stuff')
         # Adding the configuration cannot be done until a Crazyflie is
         # connected, since we need to check that the variables we
         # would like to log are in the TOC.
@@ -211,32 +199,56 @@ class MotorRampExample:
         except AttributeError:
             print('Could not add Gyroscope log config, bad configuration.')
 
-"""
-This part is for graphing, needs more work.
-def animate(i):
-    graph_data = open('SensorMaster.txt','r').read()
-    lines = graph_data.split('\n')
-    timescale = []
-    gx = []
-    gy = []
-    gz = []
-    j=1
-    for line in lines:
-        if len(lines)-200 > j:
-            print(j)
+class displayStb (object):
+    
+    tsInit = 0
+
+    def __init__(self,ax1,ax2,ax3):
+        self.ax1 = ax1
+        self.ax2 = ax2
+        self.ax3 = ax3
+        self.ax1.plot(0,0)
+        self.ax2.plot(0,0)
+        self.ax3.plot(0,0)
+        self.tsInit = 0
+
+    def update(self,arb):
+        graph_data = open('SensorMaster.txt','r').read()
+        lines = graph_data.split('\n')
+        timescale = []
+        stbRoll = []
+        stbYaw = []
+        stbPitch = []
+        j=1
+
+        for line in lines:
+            if len(lines)-100 > j:
+                j=j+1
+                continue
+            if len(line) > 2:
+                if self.tsInit == 0:
+                    ts, roll, yaw, pitch = line.split(',')
+                    timescale.append(ts)
+                    stbRoll.append(roll)
+                    stbYaw.append(yaw)
+                    stbPitch.append(pitch)
+                    self.tsInit = ts
+                else:
+                    ts, roll, yaw, pitch = line.split(',')
+                    timescale.append(str(int(ts) - int(self.tsInit)))
+                    stbRoll.append(roll)
+                    stbYaw.append(yaw)
+                    stbPitch.append(pitch)
             j=j+1
-            continue
-        if len(line) > 3:
-            sensortype, ts, x, y, z = line.split(',')
-            if sensortype == 'Gyroscope':
-                timescale.append(ts)
-                gx.append(x)
-                gy.append(y)
-                gz.append(z)
-        j=j+1   
-    ax.clear()
-    ax.plot(timescale,gx)
-"""
+
+        self.ax1.clear()
+        self.ax2.clear()
+        self.ax3.clear()
+        self.ax1.plot(timescale,stbRoll)
+        self.ax3.plot(timescale,stbYaw)
+        self.ax2.plot(timescale,stbPitch)
+
+
 
 if __name__ == '__main__':
    
@@ -269,6 +281,15 @@ if __name__ == '__main__':
 
     if len(available) > 0:
         #le = MotorRampExample(available[0][0])
-        le = MotorRampExample("radio://0/80/2M")
+        le = MotorRun("radio://0/80/2M")
     else:
         print('No Crazyflies found, cannot run example')
+
+
+    fig = plt.figure()
+    axRoll = fig.add_subplot(3,1,1)
+    axYaw = fig.add_subplot(3,1,2)
+    axPitch = fig.add_subplot(3,1,3)
+    animate = displayStb(axRoll,axYaw,axPitch)
+    ani = animation.FuncAnimation(fig, animate.update, interval=20)
+    plt.show()
