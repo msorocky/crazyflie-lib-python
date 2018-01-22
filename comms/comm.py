@@ -89,12 +89,12 @@ class Comm:
             self._lg_stab.start()
 
             self._log= self._cf.log.add_config(self._log_conf)
-            print('I did it 1')
+            #print('I did it 1')
 
             if self._log_conf is not None:
-                print('Got in the if')
+             #   print('Got in the if')
                 self._log_conf.data_received_cb.add_callback(self._log_accel_data)
-                print('callback worked')
+              #  print('callback worked')
                 self._log_conf.start()
             else:
                 print("acc.x/y/z not found in log TOC") 
@@ -137,20 +137,40 @@ class Comm:
 
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
-        print('Disconnected from %s' % link_uri)
+        print('Disconnected from %s' % link_uri) #mc = MotionCommander(self._cf)
 
     def comm_test(self): 
 
         # Unlock startup thrust protection
-        #self._cf.commander.send_setpoint(0, 0, 0, 0)
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
 
-        mc = MotionCommander(self._cf)
+        
         
         print 'Beginning test...'
-        mc.take_off()
+        
         while True:
-            i =0
-           
+            
+            thrust = 25000
+            self._cf.commander.send_setpoint(0, 0, 0, thrust) 
+
+            time.sleep(1)
+
+            self._cf.commander.send_setpoint(-30, 0, 0, thrust)
+
+            time.sleep(1)
+
+            self._cf.commander.send_setpoint(30, 0, 0, thrust)
+
+            time.sleep(1)
+
+            self._cf.commander.send_setpoint(0, 30, 0, thrust)
+
+            time.sleep(1)
+
+            self._cf.commander.send_setpoint(0, -30, 0, thrust)
+
+            time.sleep(1)
+
 if __name__ == '__main__':
 
     try:

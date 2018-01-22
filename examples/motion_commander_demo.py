@@ -32,8 +32,10 @@ tested with (and designed for) the flow deck.
 
 Change the URI variable to your Crazyflie configuration.
 """
+import sys
 import logging
 import time
+import pygame as p
 
 import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
@@ -42,29 +44,91 @@ from cflib.positioning.motion_commander import MotionCommander
 URI = 'radio://0/80/2M'
 
 # Only output errors from the logging framework
-logging.basicConfig(level=logging.ERROR)
+#logging.basicConfig(level=logging.ERROR)
 
 
 if __name__ == '__main__':
+
+    try:
+        
+        p.init()
+        
+        print '\nWASD for throttle & yaw; arrow keys for left/right/forward/backward' 
+        print 'Any key to start; spacebar to land\n'
+
+        raw_input()
+
+        while True:
+
+            keys = pygame.key.get_pressed()
+
+            if keys[K_w]:
+                print 'w'
+            elif keys[K_a]:
+                print 'a'
+            elif keys[K_a]:
+                print 'a'
+            elif keys[K_s]:
+                print 's'
+            elif keys[K_UP]:
+                print 'up'
+            elif keys[K_LEFT]:
+                print 'left'
+            elif keys[K_DOWN]:
+                print 'down'
+            elif keys[K_RIGHT]:
+                print 'right'
+
+        
+
+        # cflib.crtp.init_drivers(enable_debug_driver=False)
+
+
+        # with SyncCrazyflie(URI) as scf:
+        # # We take off when the commander is created
+        #     with MotionCommander(scf) as mc:
+        #         time.sleep(1)
+
+        #         # We land when the MotionCommander goes out of scope
+
+        #         print 'Enter WASD to move, ctrl+c to exit'   
+
+        #         key = raw_input()
+
+                
+
+        #         while True:
+
+        #             key = raw_input()
+
+        #             if key == 'w':
+        #                 print 'going up'
+        #                 mc.up(0.1)
+
+        #             elif key == 'a':
+        #                 print 'going left'
+        #                 mc.left(0.1)
+
+        #             elif key == 's':
+        #                 print 'doing down'
+        #                 mc.down(0.1)
+
+        #             elif key == 'd':
+        #                 print 'going right'
+        #                 mc.right(0.1)
+
+        #             else:
+        #                 pass
+                    
+    except KeyboardInterrupt:
+        print('\nUser interrupted operation; shutting down...')
+                
+        
+        sys.exit(0) 
+    
+    
+
+
     # Initialize the low-level drivers (don't list the debug drivers)
-    cflib.crtp.init_drivers(enable_debug_driver=False)
 
-    with SyncCrazyflie(URI) as scf:
-        # We take off when the commander is created
-        with MotionCommander(scf) as mc:
-            time.sleep(1)
-
-            # There is a set of functions that move a specific distance
-            # We can move in all directions
-            
-            time.sleep(1)
-
-            mc.up(0.1)
-            mc.down(0.1)
-            time.sleep(1)
-
-            
-            # And we can stop
-            mc.stop()
-
-            # We land when the MotionCommander goes out of scope
+    
