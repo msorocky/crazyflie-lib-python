@@ -23,12 +23,11 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA  02110-1301, USA.
-"""
-Simple example that connects to the first Crazyflie found, ramps up/down
-the motors and disconnects.
-"""
+
+
 import logging
 import time
+import math
 from threading import Thread
 from threading import Timer
 
@@ -97,14 +96,49 @@ class displayStb (object):
 
 class MotorRun:
 
+    yawInit = 0
+    yawCurr = 0
+    _theta = 0
+    _rtCoef = [1,0]
+    _lfCoef = [-1,0]
+    _fwCoef = [0,1]
+    _bkCoef = [0,-1]
+
     def __init__(self,cfobject):
+        #get initial orientation
+
         # We take off when the commander is created
-        with MotionCommander(scf) as mc:
+        with MotionCommander(cfobject) as mc:
+            #update current Yaw angle at 100 Hz
+            threading.Timer(10.0, self._updateYawCurr).start()
             #use seperate thread for motor operation
             Thread(target = self._quadMotion(mc)).start()
 
+    def _updateYawCurr(self):
+
+        #get the most updated yaw angle from storage text file
+        with open('SensorMaster.txt','r') as stbFile:
+            stbLines = stbFile.readlines()
+        
+        n=1
+        while len(stbLines[len(stbLines) - n]) < 2:
+            n+=1
+        currAttitude = stbLines[len(stbLines - n)]
+        yawCurr = currAttitude['stabilizer.yaw']
+        #update all coefficients after updating the yaw angle
+        coef = self._updateCoef
+
+    def _updateCoef(self):
+        self._theta = self.yawCurr - self.yawInit
+        self._rtCoef = [cos(self._theta), -sin(self._theta)]
+        self._lfCoef = [-cos(self._theta), sin(self._theta)]
+        self._fwCoef = [sin(self._theta), cos(self._theta)]
+        self._bkCoef = [-sin(self._theta), -cos(self._theta)]
+
+
     def _quadMotion(self,mc):
         #do stuff here
+        
         #from example (hovering)
         time.sleep(1)
 
@@ -145,7 +179,7 @@ if __name__ == '__main__':
 
     #Wait for instructiosn to fly	
     while (ifstart == 0):
-        ifstart = input('entre "1" to search for Crazyflie\n')
+        ifstart = input('Enter "1" to search for Crazyflie\n')
 
     # Initialize the low-level drivers (don't list the debug drivers)
     cflib.crtp.init_drivers(enable_debug_driver=False)

@@ -36,6 +36,9 @@ import cflib
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 
+from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
+from cflib.positioning.motion_commander import MotionCommander
+
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
@@ -282,6 +285,7 @@ if __name__ == '__main__':
     if len(available) > 0:
         #le = MotorRampExample(available[0][0])
         le = MotorRun("radio://0/80/2M")
+        #ADD THE GRAPHING HERE INSTEAD!!!!!!
     else:
         print('No Crazyflies found, cannot run example')
 

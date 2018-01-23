@@ -24,71 +24,86 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA  02110-1301, USA.
 """
-Simple example that connects to the first Crazyflie found, logs the Stabilizer
-and prints it to the console. After 10s the application disconnects and exits.
+Simple example that connects to the first Crazyflie found, ramps up/down
+the motors and disconnects.
 """
 import logging
 import time
 from threading import Thread
 from threading import Timer
 
-#from cflib import crtp
-import cflib.crtp  # noqa
+import cflib
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 
-# Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
 
-class LoggingExample:
-    """
-    Simple logging example class that logs the Stabilizer from a supplied
-    link uri and disconnects after 5s.
-    """
+class MotorRampExample:
 
     def __init__(self, link_uri):
         """ Initialize and run the example with the specified link_uri """
 
-        # Create a Crazyflie object without specifying any cache dirs
         self._cf = Crazyflie()
 
-        # Connect some callbacks from the Crazyflie API
         self._cf.connected.add_callback(self._connected)
         self._cf.disconnected.add_callback(self._disconnected)
         self._cf.connection_failed.add_callback(self._connection_failed)
         self._cf.connection_lost.add_callback(self._connection_lost)
 
-        print('Connecting to %s' % link_uri)
-
-        # Try to connect to the Crazyflie
         self._cf.open_link(link_uri)
 
-        # Variable used to keep main loop occupied until disconnect
-        self.is_connected = True
+        print('Connecting to %s' % link_uri)
 
     def _connected(self, link_uri):
         """ This callback is called form the Crazyflie API when a Crazyflie
         has been connected and the TOCs have been downloaded."""
+
+        """This is from exmaple basicLog"""
         print('Connected to %s' % link_uri)
 
-        Thread(target = self._getAccelerometer).start()
-        Thread(target = self._getGyroscope).start()
-        
-        # Start a timer to disconnect in 10s
-        t = Timer(5, self._cf.close_link)
-        t.start()
 
-    def _getAccelerometer(self):
+        # The definition of the logconfig can be made before connecting
+        self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=10)
+        self._lg_stab.add_variable('stabilizer.roll', 'float')
+        self._lg_stab.add_variable('stabilizer.pitch', 'float')
+        self._lg_stab.add_variable('stabilizer.yaw', 'float')
+
+        # Adding the configuration cannot be done until a Crazyflie is
+        # connected, since we need to check that the variables we
+        # would like to log are in the TOC.
+        try:
+            self._cf.log.add_config(self._lg_stab)
+            # This callback will receive the data
+            self._lg_stab.data_received_cb.add_callback(self._stab_log_data)
+            # This callback will be called on errors
+            self._lg_stab.error_cb.add_callback(self._stab_log_error)
+            # Start the logging
+            self._lg_stab.start()
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add Stabilizer log config, bad configuration.')
+
+        # Start a separate thread to do the motor test.
+        # Do not hijack the calling thread!
+        Thread(target=self._ramp_motors).start()
+
+
         self._log_conf = LogConfig(name="Accel", period_in_ms=10)
         self._log_conf.add_variable('acc.x', 'float')
         self._log_conf.add_variable('acc.y', 'float')
         self._log_conf.add_variable('acc.z', 'float')
 
+    
         try:
             self._log= self._cf.log.add_config(self._log_conf)
+            print('I did it 1')
             if self._log_conf is not None:
+                print('Got in the if')
                 self._log_conf.data_received_cb.add_callback(self._log_accel_data)
+                print('callback worked')
                 self._log_conf.start()
             else:
                 print("acc.x/y/z not found in log TOC") 
@@ -96,41 +111,31 @@ class LoggingExample:
             print('Could not start log configuration,'
                   '{} not found in TOC'.format(str(e)))
         except AttributeError:
-            print('Could not add Accelerometer log config, bad configuration.')
+            print('Could not add Stabilizer log config, bad configuration.')
 
-    def _getGyroscope(self):
-        self._gyro_conf = LogConfig(name="Gyro", period_in_ms=10)
-        self._gyro_conf.add_variable('gyro.x', 'float')
-        self._gyro_conf.add_variable('gyro.y', 'float')
-        self._gyro_conf.add_variable('gyro.z', 'float')
-    
-        try:
-            self._gyro= self._cf.log.add_config(self._gyro_conf)
-            if self._gyro_conf is not None:
-                self._gyro_conf.data_received_cb.add_callback(self._log_gyro_data)
-                self._gyro_conf.start()
-            else:
-                print("gyro.x/y/z not found in log TOC") 
-        except KeyError as e:
-            print('Could not start log configuration,'
-                  '{} not found in TOC'.format(str(e)))
-        except AttributeError:
-            print('Could not add Gyroscope log config, bad configuration.')
+    """This is from the basiclog file"""
+    def _stab_log_error(self, logconf, msg):
+        """Callback from the log API when an error occurs""" 
+        print('Error when logging %s: %s' % (logconf.name, msg))
+
+    def _stab_log_data(self, timestamp, data, logconf):
+        """Callback froma the log API when data arrives"""
+        """print('[%d][%s]: %s' % (timestamp, logconf.name, data))"""
+        """textfile stabilizerData.txt is currently containing all the stailizer log from Crazyflie during operation"""
+        with open('StabilizerData.txt', 'a') as stabilizerData:
+        	stabilizerData.write('[%d][%s]: %s' % (timestamp, logconf.name, data))
+        	stabilizerData.write('\n')
 
     def _log_accel_data(self, timestamp, data, logconf):
-        print('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %
-                     (timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
-
-    def _log_gyro_data(self, timestamp, data, logconf):
-        print('[%d] Gyroscope: x=%.2f, y=%.2f, z=%.2f' %
-                     (timestamp, data['gyro.x'], data['gyro.y'], data['gyro.z']))
-
+        print('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
+        #with open('AccelerometerData.txt', 'a') as AccelerometerData:
+        #	AccelerometerData.write('[%d] Accelerometer: x=%.2f, y=%.2f, z=%.2f' %(timestamp, data['acc.x'], data['acc.y'], data['acc.z']))
+        #	AccelerometerData.write('\n')	    	
 
     def _connection_failed(self, link_uri, msg):
         """Callback when connection initial connection fails (i.e no Crazyflie
-        at the speficied address)"""
+        at the specified address)"""
         print('Connection to %s failed: %s' % (link_uri, msg))
-        self.is_connected = False
 
     def _connection_lost(self, link_uri, msg):
         """Callback when disconnected after a connection has been made (i.e
@@ -140,10 +145,39 @@ class LoggingExample:
     def _disconnected(self, link_uri):
         """Callback when the Crazyflie is disconnected (called in all cases)"""
         print('Disconnected from %s' % link_uri)
-        self.is_connected = False
+
+    def _ramp_motors(self):
+        thrust_mult = 1
+        thrust_step = 500
+        thrust = 20000
+        pitch = 0
+        roll = 0
+        yawrate = 0
+
+
+        # Unlock startup thrust protection
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
+
+        while (thrust >= 20000):
+            self._cf.commander.send_setpoint(roll, pitch, yawrate, thrust)
+            time.sleep(0.1)
+            if thrust >= 30000:
+                thrust_mult = -1
+            thrust += thrust_step * thrust_mult
+        self._cf.commander.send_setpoint(0, 0, 0, 0)
+        # Make sure that the last packet leaves before the link is closed
+        # since the message queue is not flushed before closing
+        time.sleep(0.1)
+        self._cf.close_link()
 
 
 if __name__ == '__main__':
+   
+    ifstart = 0
+    	
+    while (ifstart == 0):
+        ifstart = input('entre "1" to search for Crazyflie\n')
+
     # Initialize the low-level drivers (don't list the debug drivers)
     cflib.crtp.init_drivers(enable_debug_driver=False)
     # Scan for Crazyflies and use the first one found
@@ -154,12 +188,7 @@ if __name__ == '__main__':
         print(i[0])
 
     if len(available) > 0:
-        le = LoggingExample(available[0][0])
+        #le = MotorRampExample(available[0][0])
+        le = MotorRampExample("radio://0/80/2M")
     else:
         print('No Crazyflies found, cannot run example')
-
-    # The Crazyflie lib doesn't contain anything to keep the application alive,
-    # so this is where your application should do something. In our case we
-    # are just waiting until we are disconnected.
-    while le.is_connected:
-        time.sleep(1)

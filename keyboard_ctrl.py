@@ -42,6 +42,9 @@ import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
 URI = 'radio://0/80/2M'
 
 # Only output errors from the logging framework
@@ -49,9 +52,15 @@ logging.basicConfig(level=logging.ERROR)
 
 def key_ctrl(mc, scf):
 
+    print 'Spacebar to start'
+    raw_input()
+    pygame.display.set_mode((400, 300))
+
     print 'WASD for throttle & yaw; arrow keys for left/right/forward/backward' 
     print 'Spacebar to land'
 
+    
+    
     vel_x = 0
     vel_y = 0
     vel_z = 0
@@ -122,9 +131,74 @@ def key_ctrl(mc, scf):
             mc._set_vel_setpoint(vel_x, vel_y, vel_z, yaw_rate)
 
 
+class displayStb (object):
+    
+    tsInit = 0
+
+    def __init__(self,ax1,ax2,ax3):
+        self.ax1 = ax1
+        self.ax2 = ax2
+        self.ax3 = ax3
+        self.ax1.plot(0,0)
+        self.ax2.plot(0,0)
+        self.ax3.plot(0,0)
+        self.tsInit = 0
+
+    def update(self,arb):
+        graph_data = open('SensorMaster.txt','r').read()
+        lines = graph_data.split('\n')
+        timescale = []
+        stbRoll = []
+        stbYaw = []
+        stbPitch = []
+        j=1
+
+        for line in lines:
+            if len(lines)-100 > j:
+                j=j+1
+                continue
+            if len(line) > 2:
+                if self.tsInit == 0:
+                    ts, roll, yaw, pitch = line.split(',')
+                    timescale.append(ts)
+                    stbRoll.append(roll)
+                    stbYaw.append(yaw)
+                    stbPitch.append(pitch)
+                    self.tsInit = ts
+                else:
+                    ts, roll, yaw, pitch = line.split(',')
+                    timescale.append(str(int(ts) - int(self.tsInit)))
+                    stbRoll.append(roll)
+                    stbYaw.append(yaw)
+                    stbPitch.append(pitch)
+            j=j+1
+
+        self.ax1.clear()
+        self.ax2.clear()
+        self.ax3.clear()
+        self.ax1.plot(timescale,stbRoll)
+        self.ax3.plot(timescale,stbYaw)
+        self.ax2.plot(timescale,stbPitch)
+
+
+
+
 if __name__ == '__main__':
 
     try:
+
+   	    #clearn all files if not done so previousl
+        myfile = open('StabilizerData.txt', 'w')
+        myfile.write('')
+        myfile.close()
+        myfile = open('AccelerometerData.txt', 'w')
+        myfile.write('')
+        myfile.close()
+        myfile = open('GyroscopeData.txt', 'w')
+        myfile.write('')
+        myfile.close()
+        myfile = open('SensorMaster.txt', 'w')
+        myfile.write
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
 
@@ -137,21 +211,28 @@ if __name__ == '__main__':
         #     # We take off when the commander is created
         #     with MotionCommander(scf) as mc:
         #         time.sleep(1)
-                
         #         key = Thread(target = key_ctrl, args = (mc,))
         #         key.start()
         
         scf = SyncCrazyflie(URI)
         scf.open_link()
 
+
         mc = MotionCommander(scf)
 
-        print 'Spacebar to start'
-        raw_input()
-        pygame.display.set_mode((400, 300))
+        mc._reset_position_estimator()
 
         key = Thread(target = key_ctrl, args = (mc,scf))
         key.start()
+
+        fig = plt.figure()
+        axRoll = fig.add_subplot(3,1,1)
+        axYaw = fig.add_subplot(3,1,2)
+        axPitch = fig.add_subplot(3,1,3)
+        animate = displayStb(axRoll,axYaw,axPitch)
+        ani = animation.FuncAnimation(fig, animate.update, interval=20)
+        plt.show()
+
 
        
     except Exception:
