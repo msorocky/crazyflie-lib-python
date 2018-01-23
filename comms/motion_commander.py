@@ -70,6 +70,7 @@ class MotionCommander:
 
         self.default_height = default_height
 
+        print 'Not yet flying'
         self._is_flying = False
         self._thread = None
 
@@ -91,7 +92,7 @@ class MotionCommander:
 
         #if not self._cf.is_connected():
         #    raise Exception('Crazyflie is not connected')
-
+        print 'Flying!'
         self._is_flying = True
         self._reset_position_estimator()
 
@@ -121,8 +122,10 @@ class MotionCommander:
 
             self._cf.commander.send_stop_setpoint()
             self._is_flying = False
+            print 'not flying'
 
     def __enter__(self):
+        print 'taking off'
         self.take_off()
         return self
 

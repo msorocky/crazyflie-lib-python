@@ -36,6 +36,7 @@ import sys
 import logging
 import time
 import pygame
+from threading import Thread
 
 import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
@@ -46,10 +47,17 @@ URI = 'radio://0/80/2M'
 # Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
-def key_ctrl(mc):
+def key_ctrl(mc, scf):
 
     print 'WASD for throttle & yaw; arrow keys for left/right/forward/backward' 
     print 'Spacebar to land'
+
+    vel_x = 0
+    vel_y = 0
+    vel_z = 0
+    yaw_rate = 0
+
+    mc.take_off()
 
     while True:
         
@@ -58,64 +66,60 @@ def key_ctrl(mc):
             if event.type == pygame.KEYDOWN:
 
                 if event.key == pygame.K_w:
-                    mc.up(0.3)
+                    vel_z = 0.3
 
-                elif event.key == pygame.K_SPACE:  
+                if event.key == pygame.K_SPACE:  
                     print 'Space pressed, landing'
+                    
+                    mc.land()
+                    time.sleep(2)
+                    print 'Closing link...'
+                    scf.close_link()
+                    print 'Link closed'
                     pygame.quit()
                     sys.exit(0)
 
-                elif event.key == pygame.K_a:
-                    mc.start_turn_left(30)
+                if event.key == pygame.K_a:
+                    yaw_rate = -60
 
-                elif event.key == pygame.K_s:
-                    mc.down(0.3)
+                if event.key == pygame.K_s:
+                    vel_z = -0.3
 
-                elif event.key == pygame.K_d:
-                    mc.start_turn_right(30)
+                if event.key == pygame.K_d:
+                    yaw_rate = 60
 
-                elif event.key == pygame.K_UP:
-                    mc.start_forward(0.3)   
+                if event.key == pygame.K_UP:
+                    vel_x = 0.3   
 
-                elif event.key == pygame.K_DOWN:
-                    mc.start_back(0.3)
+                if event.key == pygame.K_DOWN:
+                    vel_x = -0.3
 
-                elif event.key == pygame.K_LEFT:
-                    mc.start_left(0.3)
+                if event.key == pygame.K_LEFT:
+                    vel_y = 0.3
 
-                elif event.key == pygame.K_RIGHT:
-                    mc.start_right(0.3)
+                if event.key == pygame.K_RIGHT:
+                    vel_y = -0.3
 
-                elif event.key == pygame.K_RCTRL:
+                if event.key == pygame.K_RCTRL:
                     mc.stop()
                 
 
             if event.type == pygame.KEYUP:
                 
-                if event.key == pygame.K_w:
-                    mc.start_up(0)
+                if event.key == pygame.K_w or event.key == pygame.K_s :
+                    vel_z = 0
 
-                elif event.key == pygame.K_a:
-                    mc.start_turn_left(0)
+                if event.key == pygame.K_a or event.key == pygame.K_d:
+                    yaw_rate = 0
 
-                elif event.key == pygame.K_s:
-                    mc.start_down(0)
+                if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
+                    vel_x = 0  
 
-                elif event.key == pygame.K_d:
-                    mc.start_turn_right(0)
+                if event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
+                    vel_y = 0
 
-                elif event.key == pygame.K_UP:
-                    mc.start_forward(0)   
 
-                elif event.key == pygame.K_DOWN:
-                    mc.start_back(0)
-
-                elif event.key == pygame.K_LEFT:
-                    mc.start_left(0)
-
-                elif event.key == pygame.K_RIGHT:
-                    mc.start_right(0)
-
+            mc._set_vel_setpoint(vel_x, vel_y, vel_z, yaw_rate)
 
 
 if __name__ == '__main__':
@@ -125,19 +129,29 @@ if __name__ == '__main__':
         cflib.crtp.init_drivers(enable_debug_driver=False)
 
 
-        with SyncCrazyflie(URI) as scf:
+        # with SyncCrazyflie(URI) as scf:
 
-            print 'Spacebar to start'
-            raw_input()
-            pygame.display.set_mode((400, 300))
-            # We take off when the commander is created
-            with MotionCommander(scf) as mc:
-                time.sleep(1)
+        #     print 'Spacebar to start'
+        #     raw_input()
+        #     pygame.display.set_mode((400, 300))
+        #     # We take off when the commander is created
+        #     with MotionCommander(scf) as mc:
+        #         time.sleep(1)
                 
-                key = threading.Thread(target = key_ctrl)
-                key.start()
-                
+        #         key = Thread(target = key_ctrl, args = (mc,))
+        #         key.start()
+        
+        scf = SyncCrazyflie(URI)
+        scf.open_link()
 
+        mc = MotionCommander(scf)
+
+        print 'Spacebar to start'
+        raw_input()
+        pygame.display.set_mode((400, 300))
+
+        key = Thread(target = key_ctrl, args = (mc,scf))
+        key.start()
 
        
     except Exception:
