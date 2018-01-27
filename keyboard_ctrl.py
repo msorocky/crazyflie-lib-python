@@ -187,7 +187,7 @@ if __name__ == '__main__':
 
     try:
 
-   	    #clearn all files if not done so previousl
+   	    # Clean all files if not done so previously
         myfile = open('StabilizerData.txt', 'w')
         myfile.write('')
         myfile.close()
@@ -202,17 +202,6 @@ if __name__ == '__main__':
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
 
-
-        # with SyncCrazyflie(URI) as scf:
-
-        #     print 'Spacebar to start'
-        #     raw_input()
-        #     pygame.display.set_mode((400, 300))
-        #     # We take off when the commander is created
-        #     with MotionCommander(scf) as mc:
-        #         time.sleep(1)
-        #         key = Thread(target = key_ctrl, args = (mc,))
-        #         key.start()
         
         scf = SyncCrazyflie(URI)
         scf.open_link()
